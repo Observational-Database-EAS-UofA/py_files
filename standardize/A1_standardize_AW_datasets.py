@@ -11,24 +11,27 @@ os.chdir(rootf)
 for database_folder in [f.name for f in os.scandir() if f.is_dir() and not f.name.startswith('.')]:
     os.chdir(database_folder)
     data_base_path = os.getcwd()
-    if 'ncfiles' in os.listdir():
-        os.chdir('ncfiles')
+    if 'ncfiles_id' in os.listdir():
+        os.chdir('ncfiles_id')
         ncfiles_path = os.getcwd()
         for file_name in [f.name for f in os.scandir() if f.name.endswith('.nc')]:
             data = xr.open_dataset(file_name)
             if 'dataset' in data:
                 data = data.rename({'dataset': 'dataset_name'})
-            if 'dataset' not in data:
-                dataset_var = xr.DataArray([database_folder], name='dataset_name', )
-                data = xr.merge([data, dataset_var.to_dataset()], )
+            if 'dataset' not in data and 'dataset_name' not in data:
+                data = data.assign_attrs(dataset_name=database_folder)
+            if 'filename' in data:
+                data = data.rename({'filename': 'orig_filename'})
             if 'orig_filename' not in data:
                 filename_var = xr.DataArray([file_name], name='orig_filename', )
                 data = xr.merge([data, filename_var.to_dataset()])
-            if 'serialtime' not in data and 'datestr' in data:
+            if 'timestamp' not in data and 'serialtime' in data:
+                data = data.rename({'serialtime': 'timestamp'})
+            if 'timestamp' not in data and 'datestr' in data:
                 serialtime_var = xr.DataArray(
                     [datetime.strptime(item, "%Y/%m/%d %H:%M:%S.%f").timestamp() for item in data['datestr'].values],
                     dims='profile',
-                    name='serialtime'
+                    name='timestamp'
                 )
                 data = xr.merge([data, serialtime_var.to_dataset()], )
             if 'lat' not in data and 'latitude' in data:
@@ -45,8 +48,11 @@ for database_folder in [f.name for f in os.scandir() if f.is_dir() and not f.nam
 
             if 'press' not in data and 'z' in data:
                 press_var = [p_from_z(data['z'].values[i] * -1, data['lat'].values[i]) for i in range(len(data['z']))]
-                data['z'] = xr.DataArray(press_var, dims=('profile', 'level'), name='press')
-                data = data.rename({'z': 'press'})
+                data['press'] = xr.DataArray(np.concatenate(press_var), dims=['profile'], name='press')
+            if 'press' not in data and 'depth' in data:
+                press_var = [p_from_z(data['depth'].values[i] * -1, data['lat'].values[i]) for i in
+                             range(len(data['depth']))]
+                data['press'] = xr.DataArray(np.concatenate(press_var), dims=['profile'], name='press')
             if 'psal' not in data and 'SP' in data:
                 data = data.rename({'SP': 'sal'})
             if 'psal' not in data and 'sal' in data:
@@ -55,10 +61,6 @@ for database_folder in [f.name for f in os.scandir() if f.is_dir() and not f.nam
                 data = data.rename({'salinity': 'psal'})
 
             # Derive missing fields and fill-in missing data with NaNs within each dataset
-            if 'depth' in data and 'press' not in data:
-                press_var = [p_from_z(data['depth'].values[i] * -1, data['lat'].values[i]) for i in
-                             range(len(data['depth']))]
-                data['press'] = xr.DataArray(press_var, dims=('profile', 'level'), name='press')
             if 'psal' in data and np.isnan(data['psal']).all():
                 data['psal'] = np.nan * np.arange(len(data['temp']))
             if 'temp' in data and np.isnan(data['temp']).all():
