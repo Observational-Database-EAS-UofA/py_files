@@ -1,13 +1,13 @@
 import os
 import xarray as xr
 from id_creation.generate_id import get_all_ids, get_profile_id
-from create_empty_uber_file.uber import create_uber_file, add_new_data_to_uber_file
+from unified.unified_file import create_unified_file, add_new_data_to_unified_file
 import numpy as np
 
 
-def assign_id_to_profiles(root_folder, uber_file):
+def assign_id_to_profiles(root_folder, unified_file):
     os.chdir(root_folder)
-    id_list = get_all_ids(uber_file)
+    id_list = get_all_ids(unified_file)
     for database_folder in [f.name for f in os.scandir() if f.is_dir() and not f.name.startswith('.')]:
         dataset_list = []
         os.chdir(database_folder)
@@ -36,8 +36,8 @@ def assign_id_to_profiles(root_folder, uber_file):
                 os.chdir('ncfiles_id')
                 ds.to_netcdf(file_name[:-3] + '_id.nc')
                 os.chdir(ncfiles_path)
-        if not os.path.isfile(uber_file):
-            create_uber_file(uber_file, dataset_list)
+        if not os.path.isfile(unified_file):
+            create_unified_file(unified_file, dataset_list)
         else:
-            add_new_data_to_uber_file(uber_file, dataset_list)
+            add_new_data_to_unified_file(unified_file, dataset_list)
         os.chdir(root_folder)

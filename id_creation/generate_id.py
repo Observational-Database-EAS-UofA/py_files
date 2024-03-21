@@ -21,12 +21,12 @@ def save_new_id(profile_id):
         file.write(profile_id + "\n")
 
 
-def get_all_ids(uber_file):
-    if os.path.isfile(uber_file):
-        ds = xr.open_dataset(uber_file)
+def get_all_ids(unified_file):
+    if os.path.isfile(unified_file):
+        ds = xr.open_dataset(unified_file)
         id_list = ds['profile_id'].values
     else:
-        print("{} does not exist.".format(uber_file))
+        print("{} does not exist.".format(unified_file))
         id_list = []
 
     return np.array(id_list)
