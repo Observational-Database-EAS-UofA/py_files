@@ -37,7 +37,7 @@ class Plotter:
 
 
 if __name__ == "__main__":
-    data = '/home/novaisc/workspace/obs_database/AW_CAA/CTD_DATA/WOD_2022/ncfiles_raw/WOD_2022_raw.nc'
+    data = '/home/novaisc/workspace/obs_database/AW_CAA/CTD_DATA/ICES_2022/ncfiles_raw/ICESData_XBT_to_2022_raw.nc'
     plotter = Plotter(data)
     plotter.plot_temp_depth()
     plotter.plot_psal_depth()
