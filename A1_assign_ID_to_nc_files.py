@@ -1,7 +1,8 @@
 import os
 import random
 import xarray as xr
-from A1c_create_merged_metadata import create_merged_file, add_new_data_to_merged_file
+from A1b_create_merged_metadata import create_merged_file, add_new_data_to_merged_file
+from tqdm import tqdm
 import numpy as np
 import string
 
@@ -16,6 +17,7 @@ class IDGenerator:
         os.chdir(self.root_folder)
         all_current_id_list = self.get_all_ids(self.merged_file)
         for database_folder in [f.name for f in os.scandir() if f.is_dir() and not f.name.startswith('.')]:
+            print(f"running {database_folder} database...")
             dataset_list = []
             os.chdir(database_folder)
             data_base_path = os.getcwd()
@@ -23,7 +25,7 @@ class IDGenerator:
             if 'ncfiles_raw' in os.listdir():
                 os.chdir('ncfiles_raw')
                 ncfiles_path = os.getcwd()
-                for file_name in [f.name for f in os.scandir() if f.name.endswith('.nc')]:
+                for file_name in tqdm([f.name for f in os.scandir() if f.name.endswith('.nc')], colour='GREEN'):
                     ds = xr.open_dataset(file_name)
                     if 'profile_id' in ds or 'profile_ID' in ds:
                         raise ValueError("Profile ID already exists")
@@ -54,7 +56,7 @@ class IDGenerator:
     def get_profile_id(self, id_list):
         profile_id = self.create_id()
         while profile_id in id_list:
-            print("profile id duplicated: {}".format(profile_id))
+            # print(f"profile id duplicated: {profile_id}. Creating another one...")
             profile_id = self.create_id()
 
         id_list = np.append(id_list, profile_id)
@@ -93,6 +95,6 @@ def main(root_folder, merged_file):
 
 
 if __name__ == "__main__":
-    root = '/home/novaisc/workspace/obs_database/AW_CAA/CTD_DATA/'
-    merged = '/home/novaisc/workspace/obs_database/AW_CAA/unified_file.nc'
+    root = '/mnt/storage6/caio/AW_CAA/CTD_DATA/'
+    merged = '/mnt/storage6/caio/AW_CAA/merged_file.nc'
     main(root, merged)
