@@ -6,31 +6,14 @@ import xarray as xr
 from datetime import datetime
 from gsw import p_from_z, z_from_p
 from tqdm import tqdm
-import math
 import pytz
 
 
 class DatasetStandardizer:
     def __init__(self, root_folder):
         self.root_folder = root_folder
-        pass
 
-    # def convert_timezone(self, ds: xr.Dataset):
-    #     # convert timezone MDT and GMT to UTC and drop timezone variable
-    #     if "timezone" in ds and "datestr" in ds:
-    #         datestr = ds["datestr"].values
-    #         timezone = ds["timezone"].values
-    #         for i in range(len(datestr)):
-    #             if timezone[i] == "MDT":
-    #                 mdt_tz = pytz.timezone("America/Denver")
-    #                 mdt_datetime = datetime.strptime(datestr[i], "%Y/%m/%d %H:%M:%S")
-    #                 mdt_datetime = mdt_tz.localize(mdt_datetime)
-    #                 utc_datetime = mdt_datetime.astimezone(pytz.utc)
-    #                 datestr[i] = utc_datetime.strftime("%Y/%m/%d %H:%M:%S")
-    #         ds = ds.drop_vars("timezone")
-    #         ds["datestr"] = xr.DataArray(datestr, dims=["profile"], attrs={"timezone": "UTC"})
-    #     return ds
-
+    ### some datasets may be not using the UTC format. This function converts the datetime to UTC.
     def convert_timezone(self, ds: xr.Dataset):
         if "timezone" in ds and "datestr" in ds:
             datestr = ds["datestr"].values
@@ -47,48 +30,41 @@ class DatasetStandardizer:
             ds["datestr"] = xr.DataArray(datestr, dims=["profile"], attrs={"timezone": "UTC"})
         return ds
 
+    ### Some datasets has nan values in some measurements, like depth and pressure. So, this function derives depth from pressure and vice versa
     def standardize_depth_press(self, ds: xr.Dataset):
         parent_index = ds["parent_index"].values
 
+        ## lat dimension is "profile". So it's necessary to transform lat to "obs" dimension, so we can operate with it.
         lat_array = np.repeat(np.array(ds["lat"].values), np.unique(parent_index, return_counts=True)[1])
 
+        ## the TEOS 10 toolbox treats depth as negative. Convert the depth to negative, if necessary, before submiting to p_from_z function
         if "press" not in ds and "depth" in ds:
-            # press_var = []
-            # for i, d in enumerate(ds["depth"].values):
-            #     press_var.append(np.abs(p_from_z(d, ds["lat"].values[parent_index[i]])))
+            depth = ds["depth"].values
+            if np.sum(depth > 0) > np.sum(depth < 0):
+                depth = -depth
             ds["press"] = xr.DataArray(
-                p_from_z(ds["depth"].values, lat_array),
+                p_from_z(depth, lat_array),
                 dims=["obs"],
             )
         if "depth" not in ds and "press" in ds:
-            # depth_var = []
-            # for i, p in enumerate(ds["press"].values):
-            #     press_var.append(np.abs(z_from_p(p, ds["lat"].values[parent_index[i]])))
             ds["depth"] = xr.DataArray(
                 z_from_p(ds["press"].values, lat_array),
                 dims=["obs"],
             )
+            ds["depth"] = -ds["depth"]
 
         nan_depth_indices = np.isnan(ds["depth"])
         nan_press_indices = np.isnan(ds["press"])
 
-        # n1 = -10
-        # n2 = -2
-        # print(np.where(nan_press_indices == True))
-        # print("depth before: " + "-" *100)
-        # print(f"depth: {ds["depth"].values[n1:n2]}")
-
-        # print(f"press: {ds["press"].values[n1:n2]}")
-        # print(f"lat: {lat_array[n1:n2]}")
-        # print(nan_depth_indices[n1:n2])
-
-        z_values = np.abs(z_from_p(ds["press"].values, lat_array))
-        p_values = np.abs(p_from_z(ds["depth"].values, lat_array))
+        ### fill out all depth and pressure values with convertions. Important to notice that the depth values are beeing converted to positive, since TEOS 10 consider depth negative
+        z_values = -z_from_p(ds["press"].values, lat_array)
+        depth = ds["depth"].values
+        if np.sum(depth > 0) > np.sum(depth < 0):
+            depth = -depth
+        p_values = p_from_z(depth, lat_array)
 
         ds["depth"] = xr.where(nan_depth_indices, z_values, ds["depth"])
         ds["press"] = xr.where(nan_press_indices, p_values, ds["press"])
-        # print("depth after" + "-" * 100)
-        # print(ds["depth"].values[n1:n2])
 
         return ds
 
@@ -126,14 +102,15 @@ class DatasetStandardizer:
 
     def run(self):
         os.chdir(self.root_folder)
-        for database_folder in [f.name for f in os.scandir() if f.is_dir() and not f.name.startswith(".")]:
+        for database_folder in [f.name for f in os.scandir() if f.is_dir()]:
+            # for database_folder in [f.name for f in os.scandir() if f.is_dir() and f.name.startswith("MEDS_2021")]:
             os.chdir(database_folder)
             data_base_path = os.getcwd()
             if "ncfiles_id" in os.listdir():
                 os.chdir("ncfiles_id")
                 ncfiles_path = os.getcwd()
                 for file_name in [f.name for f in os.scandir() if f.name.endswith(".nc")]:
-                    print(file_name)
+                    print(f"Running on {file_name} file")
                     ds = xr.open_dataset(file_name)
                     ds = self.convert_timezone(ds)
                     ds = self.standardize_depth_press(ds)
@@ -143,12 +120,9 @@ class DatasetStandardizer:
                         ds["psal"] = xr.DataArray([np.nan] * len(ds["depth"]), dims=["obs"])
 
                     ds = self.add_len_sum_obs_variables(ds)
-                    # data_base_path = self.root_folder
                     self.save_file(ds, data_base_path, ncfiles_path, file_name)
 
                     ds.close()
-                    # break
-
             os.chdir(self.root_folder)
 
 
@@ -158,9 +132,9 @@ def main(root_folder):
 
 
 if __name__ == "__main__":
+    print("Standardazing all data and saving it to ncfiles_standard/ folder inside each database folder...")
     root = "/mnt/storage6/caio/AW_CAA/CTD_DATA"
-    # root = "/mnt/storage6/caio/AW_CAA/CTD_DATA/MEDS_2021/"
 
     start_time = time.time()
     main(root)
-    print(f"total: {time.time() - start_time} seconds")
+    # print(f"total time spent: {time.time() - start_time} seconds")
