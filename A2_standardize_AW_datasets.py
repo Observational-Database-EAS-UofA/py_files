@@ -1,3 +1,24 @@
+"""
+ This code processes datasets within a specified root folder, standardizing various aspects of the data.
+ The main operations include:
+ 1. Converting timezone information to UTC.
+ 2. Standardizing depth and pressure measurements.
+ 3. Adding summary statistics for key variables.
+ 4. Saving the standardized datasets to a designated subdirectory within each database folder.
+ 
+ The script follows these steps:
+ 1. Initialize the DatasetStandardizer with the root folder containing the data.
+ 2. Iterate through each subdirectory within the root folder.
+ 3. For each NetCDF file in the 'ncfiles_id' subdirectory of each database folder:
+    a. Open the dataset.
+    b. Convert the timezone to UTC if applicable.
+    c. Standardize the depth and pressure measurements, deriving missing values when necessary.
+    d. Ensure the presence of salinity data, filling with NaNs if missing.
+    e. Add summary statistics (length and sum) for depth, pressure, temperature, and salinity.
+    f. Save the standardized dataset to a new file in the 'ncfiles_standard' subdirectory.
+ 4. Repeat for all database folders.
+"""
+
 import os
 import time
 import numpy as np
@@ -22,12 +43,16 @@ class DatasetStandardizer:
 
             if np.any(mdt_indices):
                 mdt_tz = pytz.timezone("America/Denver")
-                datetime_array = pd.to_datetime(datestr[mdt_indices], format="%Y/%m/%d %H:%M:%S")
+                datetime_array = pd.to_datetime(
+                    datestr[mdt_indices], format="%Y/%m/%d %H:%M:%S"
+                )
                 datetime_array = datetime_array.tz_localize(mdt_tz).tz_convert("UTC")
                 datestr[mdt_indices] = datetime_array.strftime("%Y/%m/%d %H:%M:%S")
 
             ds = ds.drop_vars("timezone")
-            ds["datestr"] = xr.DataArray(datestr, dims=["profile"], attrs={"timezone": "UTC"})
+            ds["datestr"] = xr.DataArray(
+                datestr, dims=["profile"], attrs={"timezone": "UTC"}
+            )
         return ds
 
     ### Some datasets has nan values in some measurements, like depth and pressure. So, this function derives depth from pressure and vice versa
@@ -35,7 +60,9 @@ class DatasetStandardizer:
         parent_index = ds["parent_index"].values
 
         ## lat dimension is "profile". So it's necessary to transform lat to "obs" dimension, so we can operate with it.
-        lat_array = np.repeat(np.array(ds["lat"].values), np.unique(parent_index, return_counts=True)[1])
+        lat_array = np.repeat(
+            np.array(ds["lat"].values), np.unique(parent_index, return_counts=True)[1]
+        )
 
         ## the TEOS 10 toolbox treats depth as negative. Convert the depth to negative, if necessary, before submiting to p_from_z function
         if "press" not in ds and "depth" in ds:
@@ -109,7 +136,9 @@ class DatasetStandardizer:
             if "ncfiles_id" in os.listdir():
                 os.chdir("ncfiles_id")
                 ncfiles_path = os.getcwd()
-                for file_name in [f.name for f in os.scandir() if f.name.endswith(".nc")]:
+                for file_name in [
+                    f.name for f in os.scandir() if f.name.endswith(".nc")
+                ]:
                     print(f"Running on {file_name} file")
                     ds = xr.open_dataset(file_name)
                     ds = self.convert_timezone(ds)
@@ -117,7 +146,9 @@ class DatasetStandardizer:
 
                     ### standardize salinity
                     if "psal" not in ds:
-                        ds["psal"] = xr.DataArray([np.nan] * len(ds["depth"]), dims=["obs"])
+                        ds["psal"] = xr.DataArray(
+                            [np.nan] * len(ds["depth"]), dims=["obs"]
+                        )
 
                     ds = self.add_len_sum_obs_variables(ds)
                     self.save_file(ds, data_base_path, ncfiles_path, file_name)
@@ -132,7 +163,9 @@ def main(root_folder):
 
 
 if __name__ == "__main__":
-    print("Standardazing all data and saving it to ncfiles_standard/ folder inside each database folder...")
+    print(
+        "Standardazing all data and saving it to ncfiles_standard/ folder inside each database folder..."
+    )
     root = "/mnt/storage6/caio/AW_CAA/CTD_DATA"
 
     start_time = time.time()
