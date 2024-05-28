@@ -3,6 +3,11 @@ This code manages the creation and updating of a merged dataset file from multip
 The key operations include:
 1. Creating a merged file from a list of datasets.
 2. Adding new datasets to an existing merged file.
+
+Functions in the script:
+1. create_merged_file: Create a merged file by combining information from a list of datasets.
+2. add_new_data_to_merged_file: Add new data to an existing merged file by appending dataset information.
+
 """
 
 import os
@@ -14,6 +19,13 @@ import xarray as xr
 
 
 def create_merged_file(merged_file, dataset_list):
+    """
+    Create a merged file by combining information from a list of datasets.
+
+    Args:
+        merged_file (str): Path to the merged file.
+        dataset_list (list): List of datasets containing information to be merged.
+    """
     string_attrs = [
         "profile_id",
         "creation_date",
@@ -69,6 +81,13 @@ def create_merged_file(merged_file, dataset_list):
 
 
 def add_new_data_to_merged_file(merged_file, ds_list):
+    """
+    Add new data to an existing merged file by appending dataset information.
+
+    Args:
+        merged_file (str): Path to the merged file.
+        ds_list (list): List of datasets to be appended to the merged file.
+    """
     if os.path.isfile(merged_file):
         print("adding new data")
         ds_list.append(xr.open_dataset(merged_file))

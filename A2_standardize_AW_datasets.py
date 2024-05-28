@@ -1,22 +1,19 @@
 """
- This code processes datasets within a specified root folder, standardizing various aspects of the data.
- The main operations include:
- 1. Converting timezone information to UTC.
- 2. Standardizing depth and pressure measurements.
- 3. Adding summary statistics for key variables.
- 4. Saving the standardized datasets to a designated subdirectory within each database folder.
- 
- The script follows these steps:
- 1. Initialize the DatasetStandardizer with the root folder containing the data.
- 2. Iterate through each subdirectory within the root folder.
- 3. For each NetCDF file in the 'ncfiles_id' subdirectory of each database folder:
-    a. Open the dataset.
-    b. Convert the timezone to UTC if applicable.
-    c. Standardize the depth and pressure measurements, deriving missing values when necessary.
-    d. Ensure the presence of salinity data, filling with NaNs if missing.
-    e. Add summary statistics (length and sum) for depth, pressure, temperature, and salinity.
-    f. Save the standardized dataset to a new file in the 'ncfiles_standard' subdirectory.
- 4. Repeat for all database folders.
+This script standardizes datasets by converting date-time to UTC timezone and deriving depth from pressure and vice versa 
+if necessary. It also adds additional variables like 'len' and 'sum' to observational variables for further analysis.
+
+Steps followed in the script:
+1. Convert date-time to UTC timezone if necessary.
+2. Derive depth from pressure and vice versa if one of them is missing.
+3. Add additional variables like 'len' and 'sum' to observational variables for further analysis.
+4. Save the standardized datasets as NetCDF files.
+
+Functions in the script:
+1. convert_timezone: Converts date-time to UTC timezone if necessary.
+2. standardize_depth_press: Derives depth from pressure and vice versa if necessary.
+3. add_len_sum_obs_variables: Adds 'len' and 'sum' variables to observational variables.
+4. save_file: Saves the standardized Dataset as a NetCDF file.
+5. run: Main function to execute the standardization process for all datasets.
 """
 
 import os
@@ -34,8 +31,16 @@ class DatasetStandardizer:
     def __init__(self, root_folder):
         self.root_folder = root_folder
 
-    ### some datasets may be not using the UTC format. This function converts the datetime to UTC.
     def convert_timezone(self, ds: xr.Dataset):
+        """
+        Convert date-time to UTC timezone if necessary.
+
+        Args:
+            ds (xarray.Dataset): Dataset containing date-time information.
+
+        Returns:
+            xarray.Dataset: Dataset with date-time converted to UTC timezone.
+        """
         if "timezone" in ds and "datestr" in ds:
             datestr = ds["datestr"].values
             timezone = ds["timezone"].values
@@ -43,26 +48,28 @@ class DatasetStandardizer:
 
             if np.any(mdt_indices):
                 mdt_tz = pytz.timezone("America/Denver")
-                datetime_array = pd.to_datetime(
-                    datestr[mdt_indices], format="%Y/%m/%d %H:%M:%S"
-                )
+                datetime_array = pd.to_datetime(datestr[mdt_indices], format="%Y/%m/%d %H:%M:%S")
                 datetime_array = datetime_array.tz_localize(mdt_tz).tz_convert("UTC")
                 datestr[mdt_indices] = datetime_array.strftime("%Y/%m/%d %H:%M:%S")
 
             ds = ds.drop_vars("timezone")
-            ds["datestr"] = xr.DataArray(
-                datestr, dims=["profile"], attrs={"timezone": "UTC"}
-            )
+            ds["datestr"] = xr.DataArray(datestr, dims=["profile"], attrs={"timezone": "UTC"})
         return ds
 
-    ### Some datasets has nan values in some measurements, like depth and pressure. So, this function derives depth from pressure and vice versa
     def standardize_depth_press(self, ds: xr.Dataset):
+        """
+        Derive depth from pressure and vice versa if necessary.
+
+        Args:
+            ds (xarray.Dataset): Dataset containing pressure and/or depth information.
+
+        Returns:
+            xarray.Dataset: Dataset with standardized pressure and depth variables.
+        """
         parent_index = ds["parent_index"].values
 
         ## lat dimension is "profile". So it's necessary to transform lat to "obs" dimension, so we can operate with it.
-        lat_array = np.repeat(
-            np.array(ds["lat"].values), np.unique(parent_index, return_counts=True)[1]
-        )
+        lat_array = np.repeat(np.array(ds["lat"].values), np.unique(parent_index, return_counts=True)[1])
 
         ## the TEOS 10 toolbox treats depth as negative. Convert the depth to negative, if necessary, before submiting to p_from_z function
         if "press" not in ds and "depth" in ds:
@@ -96,7 +103,15 @@ class DatasetStandardizer:
         return ds
 
     def add_len_sum_obs_variables(self, ds):
-        ### add len and sum to all obs variables to use in the merged file after
+        """
+        Add 'len' and 'sum' variables to observational variables.
+
+        Args:
+            ds (xarray.Dataset): Dataset containing observational variables.
+
+        Returns:
+            xarray.Dataset: Dataset with 'len' and 'sum' variables added to observational variables.
+        """
         ds["depth"].attrs = {
             **ds["depth"].attrs,
             "lendepth": len(ds["depth"]),
@@ -120,6 +135,15 @@ class DatasetStandardizer:
         return ds
 
     def save_file(self, ds, database_path, ncfiles_path, filename):
+        """
+        Save the standardized Dataset as a NetCDF file.
+
+        Args:
+            ds (xarray.Dataset): Standardized Dataset to be saved.
+            database_path (str): Path to the database folder.
+            ncfiles_path (str): Path to the ncfiles folder.
+            filename (str): Name of the original NetCDF file.
+        """
         os.chdir(database_path)
         if "ncfiles_standard" not in os.listdir():
             os.mkdir("ncfiles_standard")
@@ -128,6 +152,7 @@ class DatasetStandardizer:
         os.chdir(ncfiles_path)
 
     def run(self):
+        """Main function to execute the standardization process for all datasets."""
         os.chdir(self.root_folder)
         for database_folder in [f.name for f in os.scandir() if f.is_dir()]:
             # for database_folder in [f.name for f in os.scandir() if f.is_dir() and f.name.startswith("MEDS_2021")]:
@@ -136,9 +161,7 @@ class DatasetStandardizer:
             if "ncfiles_id" in os.listdir():
                 os.chdir("ncfiles_id")
                 ncfiles_path = os.getcwd()
-                for file_name in [
-                    f.name for f in os.scandir() if f.name.endswith(".nc")
-                ]:
+                for file_name in [f.name for f in os.scandir() if f.name.endswith(".nc")]:
                     print(f"Running on {file_name} file")
                     ds = xr.open_dataset(file_name)
                     ds = self.convert_timezone(ds)
@@ -146,9 +169,7 @@ class DatasetStandardizer:
 
                     ### standardize salinity
                     if "psal" not in ds:
-                        ds["psal"] = xr.DataArray(
-                            [np.nan] * len(ds["depth"]), dims=["obs"]
-                        )
+                        ds["psal"] = xr.DataArray([np.nan] * len(ds["depth"]), dims=["obs"])
 
                     ds = self.add_len_sum_obs_variables(ds)
                     self.save_file(ds, data_base_path, ncfiles_path, file_name)
@@ -158,14 +179,18 @@ class DatasetStandardizer:
 
 
 def main(root_folder):
+    """
+    Main function to initiate the dataset standardization process.
+
+    Args:
+        root_folder (str): Path to the root folder containing dataset folders.
+    """
     dataset_standardizer = DatasetStandardizer(root_folder)
     dataset_standardizer.run()
 
 
 if __name__ == "__main__":
-    print(
-        "Standardazing all data and saving it to ncfiles_standard/ folder inside each database folder..."
-    )
+    print("Standardazing all data and saving it to ncfiles_standard/ folder inside each database folder...")
     root = "/mnt/storage6/caio/AW_CAA/CTD_DATA"
 
     start_time = time.time()
