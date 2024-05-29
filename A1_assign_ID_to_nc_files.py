@@ -57,10 +57,7 @@ class IDGenerator:
             if "ncfiles_raw" in os.listdir():
                 os.chdir("ncfiles_raw")
                 ncfiles_path = os.getcwd()
-                for file_name in tqdm(
-                    [f.name for f in os.scandir() if f.name.endswith(".nc")],
-                    colour="GREEN",
-                ):
+                for file_name in tqdm([f.name for f in os.scandir() if f.name.endswith(".nc")], colour="GREEN"):
                     ds = xr.open_dataset(file_name)
                     if "profile_id" in ds or "profile_ID" in ds:
                         raise ValueError("Profile ID already exists")
@@ -69,10 +66,7 @@ class IDGenerator:
                         all_current_id_list, profile_id = self.get_profile_id(all_current_id_list)
                         profiles_id.append(profile_id)
 
-                    ds["profile_id"] = xr.DataArray(
-                        profiles_id,
-                        dims=["profile"],
-                    )
+                    ds["profile_id"] = xr.DataArray(profiles_id, dims=["profile"])
                     dataset_list.append(ds)
 
                     # save the file
