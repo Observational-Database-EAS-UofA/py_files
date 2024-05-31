@@ -12,7 +12,6 @@ Functions in the script:
 
 import os
 import datetime as dt
-import time
 
 import numpy as np
 import xarray as xr

@@ -111,11 +111,17 @@ class DatasetStandardizer:
                 depth = -depth
             ds["press"] = xr.DataArray(p_from_z(depth, lat_array), dims=["press_obs"])
             ds["press_row_size"] = ds["depth_row_size"]
+            if "depth_flag" in ds:
+                ds["press_flag"] = xr.DataArray([np.nan] * ds["depth_flag"].values, dims=["press_obs"])
         elif "depth" not in ds and "press" in ds:
             lat_array = np.repeat(np.array(ds["lat"].values), ds["press_row_size"].values)
             ds["depth"] = xr.DataArray(-z_from_p(ds["press"].values, lat_array), dims=["depth_obs"])
             ds["depth_row_size"] = ds["press_row_size"]
+            if "press_flag" in ds:
+                ds["depth_flag"] = xr.DataArray([np.nan] * ds["press_flag"].values, dims=["depth_obs"])
+            print(ds)
         else:
+            ### equalizing dimensions
             depth_array, d_row_size, depth_flag = self.__fill_with_nan(ds, "depth", "press")
             press_array, p_row_size, press_flag = self.__fill_with_nan(ds, "press", "depth")
 
@@ -127,8 +133,9 @@ class DatasetStandardizer:
             ### fill out all depth and pressure values with convertions. Important to notice that the depth values are beeing converted to positive, since TEOS 10 consider depth negative
             z_values = -z_from_p(press_array, lat_array)
             if np.sum(depth_array > 0) > np.sum(depth_array < 0):
-                depth_array = -depth_array
-            p_values = p_from_z(depth_array, lat_array)
+                p_values = p_from_z(-depth_array, lat_array)
+            else:
+                p_values = p_from_z(depth_array, lat_array)
 
             ds = ds.drop_vars(["depth", "press"])
             if len(depth_flag) != 0:
@@ -193,25 +200,6 @@ class DatasetStandardizer:
         ds.to_netcdf(filename[:-3] + "_standard.nc")
         os.chdir(ncfiles_path)
 
-    # def test_run(self):
-    #     os.chdir(self.root_folder)
-    #     files = [f.name for f in os.scandir() if f.name.endswith(".nc")]
-    #     print(files)
-    #     for file_name in files:
-    #         print(f"Running on {file_name} file")
-    #         ds = xr.open_dataset(file_name)
-    #         ds = self.convert_timezone(ds)
-    #         ds = self.standardize_depth_press(ds)
-
-    #         ### standardize salinity
-    #         if "psal" not in ds:
-    #             ds["psal"] = xr.DataArray([np.nan] * len(ds["depth"]), dims=["psal_obs"])
-
-    #         ds = self.add_len_sum_obs_variables(ds)
-    #         # print(ds)
-
-    #         ds.close()
-
     def run(self):
         """Main function to execute the standardization process for all datasets."""
         os.chdir(self.root_folder)
@@ -227,9 +215,11 @@ class DatasetStandardizer:
                     ds = self.convert_timezone(ds)
                     ds = self.standardize_depth_press(ds)
 
-                    ### standardize salinity
+                    ### standardize T&S
+                    if "temp" not in ds:
+                        ds["temp"] = xr.DataArray([np.nan] * len(ds["depth"]), dims=["temp_obs"])
                     if "psal" not in ds:
-                        ds["psal"] = xr.DataArray([np.nan] * len(ds["depth"]), dims=["obs"])
+                        ds["psal"] = xr.DataArray([np.nan] * len(ds["depth"]), dims=["psal_obs"])
 
                     ds = self.add_len_sum_obs_variables(ds)
                     self.save_file(ds, data_base_path, ncfiles_path, file_name)
