@@ -119,7 +119,6 @@ class DatasetStandardizer:
             ds["depth_row_size"] = ds["press_row_size"]
             if "press_flag" in ds:
                 ds["depth_flag"] = xr.DataArray([np.nan] * ds["press_flag"].values, dims=["depth_obs"])
-            print(ds)
         else:
             ### equalizing dimensions
             depth_array, d_row_size, depth_flag = self.__fill_with_nan(ds, "depth", "press")
