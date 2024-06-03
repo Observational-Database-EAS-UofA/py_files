@@ -8,3 +8,4 @@ pip=24.0=py312h06a4308_0
 tk=8.6.14=h39e8969_0
 tqdm=4.66.4=py312he106c6f_0
 xarray=2024.3.0=pyhd8ed1ab_0
+gsw
